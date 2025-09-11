@@ -1,0 +1,17 @@
+./cli.py
+./src/retrieval/retriever.py
+./src/document_loader/pdf_loader.py
+./src/document_loader/ocr_processor.py
+./src/ingestion/pipeline.py
+./src/embeddings/embedding_service.py
+./src/generation/llm_client.py
+./src/utils/metadata_utils.py
+./src/utils/file_utils.py
+./src/preprocessing/chunker.py
+./src/preprocessing/text_cleaner.py
+./src/vector_store/chromadb_client.py
+./tests/test_embeddings.py
+./tests/test_pdf_loader.py
+./tests/test_chunker.py
+./main.py
+./config.py
