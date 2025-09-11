@@ -17,6 +17,7 @@ class Config:
     
     # Document processing settings (currently PDF-specific)
     MAX_PAGES_PER_PDF = None  # Process all pages if None
+    MAX_PAGES_PER_PDF = 5  # Process all pages if None
     MIN_IMAGE_WIDTH = 100
     MIN_IMAGE_HEIGHT = 100
     

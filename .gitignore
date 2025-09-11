@@ -1,5 +1,6 @@
 context.txt
 __pycache__
 *.pyc
-.gitkeep
+*.gitkeep
 __init__.py
+data/images
