@@ -1,9 +1,10 @@
 """Main ingestion pipeline for processing document files."""
 
-import time
 from typing import List, Dict
+from pathlib import Path
 from config import Config
 from src.utils.file_utils import list_and_validate_files
+from src.document_loader.pdf_loader import PDFLoader
 
 
 class IngestionPipeline:
@@ -13,6 +14,8 @@ class IngestionPipeline:
         self.config = Config
         self.processed_files = []
         self.failed_files = []
+        # Initialize processors
+        self.pdf_loader = PDFLoader()
     
     def run_ingestion(self, directory_path: str = None, pattern: str = "*.pdf", 
                      expected_extensions: List[str] = None, file_type: str = "document"):
@@ -97,12 +100,13 @@ class IngestionPipeline:
         print(f"Ready to process {len(readable_files)} {file_type} files.")
         
         while True:
-            response = input("Do you want to proceed? (y/n): ").lower().strip()
+            response = input("Do you want to proceed? (Y/n): ").lower().strip()
             if response in ['y', 'yes']:
                 return True
             elif response in ['n', 'no']:
                 return False
             else:
+                return True
                 print("Please enter 'y' for yes or 'n' for no.")
     
     def process_document_files(self, doc_files: List[Dict], file_type: str):
@@ -123,10 +127,16 @@ class IngestionPipeline:
             
             try:
                 # Process based on file type/extension
-                self.process_single_file(file_info)
+                processing_result = self.process_single_file(file_info)
                 
                 print(f"  ✓ Successfully processed: {file_info['name']}")
-                self.processed_files.append(file_info)
+                
+                # Store both original file info and processing results
+                processed_file_data = {
+                    'file_info': file_info,
+                    'processing_result': processing_result
+                }
+                self.processed_files.append(processed_file_data)
                 
             except Exception as e:
                 print(f"  ✗ Failed to process: {file_info['name']}")
@@ -145,53 +155,88 @@ class IngestionPipeline:
         """
         file_extension = file_info.get('extension', '').lower()
         
-        print("  - Loading document...")
-        time.sleep(0.5)  # Remove this in actual implementation
-        
         if file_extension == '.pdf':
-            self.process_pdf_file(file_info)
+            return self.process_pdf_file(file_info)
         elif file_extension in ['.txt', '.md']:
-            self.process_text_file(file_info)
+            return self.process_text_file(file_info)
         elif file_extension in ['.docx', '.doc']:
-            self.process_word_file(file_info)
+            return self.process_word_file(file_info)
         else:
-            print(f"  - Unsupported file type: {file_extension}")
             raise ValueError(f"Unsupported file type: {file_extension}")
     
     def process_pdf_file(self, file_info: Dict):
-        """Process a PDF file."""
-        print("  - Extracting text and images from PDF...")
-        time.sleep(0.5)  # Remove this in actual implementation
-        
-        print("  - Processing with OCR...")
-        time.sleep(0.5)  # Remove this in actual implementation
-        
-        self.common_processing_steps()
+        """Process a PDF file using PDFLoader."""
+        try:
+            # Load PDF with text and image extraction
+            pdf_result = self.pdf_loader.load_pdf(file_info['path'])
+            
+            # Save the extracted documents info to processed folder
+            self.save_processed_data(file_info, pdf_result)
+            
+            return pdf_result
+            
+        except Exception as e:
+            raise Exception(f"PDF processing failed: {str(e)}")
     
     def process_text_file(self, file_info: Dict):
         """Process a text file."""
         print("  - Reading text content...")
-        time.sleep(0.3)  # Remove this in actual implementation
-        
-        self.common_processing_steps()
+        # TODO: Implement text file processing
+        raise NotImplementedError("Text file processing not yet implemented")
     
     def process_word_file(self, file_info: Dict):
         """Process a Word document."""
         print("  - Extracting text from Word document...")
-        time.sleep(0.4)  # Remove this in actual implementation
-        
-        self.common_processing_steps()
+        # TODO: Implement Word document processing
+        raise NotImplementedError("Word document processing not yet implemented")
     
-    def common_processing_steps(self):
-        """Common processing steps for all file types."""
-        print("  - Chunking text...")
-        time.sleep(0.3)  # Remove this in actual implementation
+    def save_processed_data(self, file_info: Dict, pdf_result: Dict):
+        """
+        Save processed data to the processed folder.
+        This is temporary until we implement vector storage.
         
-        print("  - Generating embeddings...")
-        time.sleep(0.7)  # Remove this in actual implementation
+        Args:
+            file_info: Original file information
+            pdf_result: Result from PDF processing
+        """
+        import json
         
-        print("  - Storing in vector database...")
-        time.sleep(0.3)  # Remove this in actual implementation
+        processed_dir = Path(self.config.PROCESSED_DATA_PATH)
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create a summary file with processing results
+        file_name = file_info['name'].replace('.pdf', '')
+        summary_file = processed_dir / f"{file_name}_summary.json"
+        
+        summary_data = {
+            'original_file': file_info['path'],
+            'file_name': pdf_result['file_name'],
+            'processing_timestamp': str(Path(file_info['path']).stat().st_mtime),
+            'text_documents': pdf_result['text_document_count'],
+            'image_documents': pdf_result['image_document_count'],
+            'total_documents': pdf_result['total_document_count'],
+            'documents_preview': []
+        }
+        
+        # Add preview of first few documents
+        for i, doc in enumerate(pdf_result['documents'][:5]):
+            doc_preview = {
+                'document_index': i,
+                'type': doc.metadata['type'],
+                'page': doc.metadata['page'],
+                'char_count': doc.metadata.get('char_count', 0),
+                'content_preview': doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content
+            }
+            if doc.metadata['type'] == 'image_ocr':
+                doc_preview['image_path'] = doc.metadata.get('image_path', '')
+            
+            summary_data['documents_preview'].append(doc_preview)
+        
+        # Save summary to JSON file
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"  - Saved processing summary to: {summary_file}")
     
     def show_final_summary(self):
         """Show the final processing summary."""
@@ -204,16 +249,48 @@ class IngestionPipeline:
         
         if self.processed_files:
             print("\nSuccessfully processed files:")
-            for file_info in self.processed_files:
-                print(f"  ✓ {file_info['name']} ({file_info['size_mb']} MB)")
+            for processed_item in self.processed_files:
+                # Handle both old format (just file_info) and new format (dict with file_info and processing_result)
+                if isinstance(processed_item, dict) and 'file_info' in processed_item:
+                    # New format
+                    file_info = processed_item['file_info']
+                    processing_result = processed_item.get('processing_result', {})
+                    
+                    if isinstance(processing_result, dict) and 'total_document_count' in processing_result:
+                        # PDF processing result
+                        doc_count = processing_result['total_document_count']
+                        print(f"  ✓ {file_info['name']} ({file_info['size_mb']} MB) - {doc_count} documents extracted")
+                    else:
+                        # Other file types
+                        print(f"  ✓ {file_info['name']} ({file_info['size_mb']} MB)")
+                else:
+                    # Old format (just file_info dict)
+                    file_info = processed_item
+                    print(f"  ✓ {file_info['name']} ({file_info['size_mb']} MB)")
         
         if self.failed_files:
             print("\nFailed files:")
             for failed in self.failed_files:
                 print(f"  ✗ {failed['file_info']['name']} - {failed['error']}")
         
-        total_size = sum(f['size_mb'] for f in self.processed_files)
+        # Calculate totals handling both old and new formats
+        total_size = 0
+        total_documents = 0
+        
+        for processed_item in self.processed_files:
+            if isinstance(processed_item, dict) and 'file_info' in processed_item:
+                # New format
+                total_size += processed_item['file_info']['size_mb']
+                processing_result = processed_item.get('processing_result', {})
+                if isinstance(processing_result, dict):
+                    total_documents += processing_result.get('total_document_count', 0)
+            else:
+                # Old format
+                total_size += processed_item['size_mb']
+        
         print(f"\nTotal processed data: {total_size:.2f} MB")
+        if total_documents > 0:
+            print(f"Total documents extracted: {total_documents}")
         print("Ingestion pipeline completed.")
 
 

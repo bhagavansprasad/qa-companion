@@ -4,3 +4,5 @@ __pycache__
 *.gitkeep
 __init__.py
 data/images
+data/processed/CAN_Spec_DC_10734_summary.json
+data/processed/android-binder-ipc_summary.json
